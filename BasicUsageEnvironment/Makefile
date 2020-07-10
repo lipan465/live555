@@ -19,6 +19,7 @@ LIB_SUFFIX =			a
 LIBS_FOR_CONSOLE_APPLICATION = -lssl -lcrypto
 LIBS_FOR_GUI_APPLICATION =
 EXE =
+DESTDIR = /root/live-install
 ##### End of variables to change
 
 NAME = libBasicUsageEnvironment

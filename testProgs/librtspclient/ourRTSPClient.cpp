@@ -1,7 +1,8 @@
-#include "liveMedia.hh"
-#include "BasicUsageEnvironment.hh"
-#include <thread>
-#include <string>
+#include "ourRTSPClient.h"
+#include "DummySink.h"
+
+
+int ourRTSPClient::rtspClientCount = 0;
 
 UsageEnvironment& operator<<(UsageEnvironment& env, const RTSPClient& rtspClient) {
   return env << "[URL:\"" << rtspClient.url() << "\"]: ";
@@ -11,74 +12,6 @@ UsageEnvironment& operator<<(UsageEnvironment& env, const RTSPClient& rtspClient
 UsageEnvironment& operator<<(UsageEnvironment& env, const MediaSubsession& subsession) {
   return env << subsession.mediumName() << "/" << subsession.codecName();
 }
-class DummySink: public MediaSink {
-public:
-  static DummySink* createNew(UsageEnvironment& env,
-			      MediaSubsession& subsession, // identifies the kind of data that's being received
-			      char const* streamId = NULL); // identifies the stream itself (optional)
-
-private:
-  DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId);
-    // called only by "createNew()"
-  virtual ~DummySink();
-
-  static void afterGettingFrame(void* clientData, unsigned frameSize,
-                                unsigned numTruncatedBytes,
-				struct timeval presentationTime,
-                                unsigned durationInMicroseconds);
-  void afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes,
-			 struct timeval presentationTime, unsigned durationInMicroseconds);
-
-private:
-  // redefined virtual functions:
-  virtual Boolean continuePlaying();
-
-private:
-  u_int8_t* fReceiveBuffer;
-  MediaSubsession& fSubsession;
-  char* fStreamId;
-};
-
-class MyRstpClient {
-public:
-    MyRstpClient();
-    ~MyRstpClient();
-    int connect(const std::string& url);
-private:
-    void openURL(UsageEnvironment& env, char const* progName, char const* rtspURL);
-    static void continueAfterDESCRIBE(RTSPClient* rtspClient, int resultCode, char* resultString);
-
-    UsageEnvironment* _env;
-    std::thread _event_loop;
-    volatile char _b_quit;
-};
-
-MyRstpClient::MyRstpClient() {
-
-}
-
-MyRstpClient::~MyRstpClient() {
-
-}
-
-int MyRstpClient::connect(const std::string& url) {
-    return 0;
-}
-
-
-
-class StreamClientState {
-public:
-  StreamClientState();
-  virtual ~StreamClientState();
-
-public:
-  MediaSubsessionIterator* iter;
-  MediaSession* session;
-  MediaSubsession* subsession;
-  TaskToken streamTimerTask;
-  double duration;
-};
 
 StreamClientState::StreamClientState()
   : iter(NULL), session(NULL), subsession(NULL), streamTimerTask(NULL), duration(0.0) {
@@ -94,55 +27,6 @@ StreamClientState::~StreamClientState() {
     Medium::close(session);
   }
 }
-
-// If you're streaming just a single stream (i.e., just from a single URL, once), then you can define and use just a single
-// "StreamClientState" structure, as a global variable in your application.  However, because - in this demo application - we're
-// showing how to play multiple streams, concurrently, we can't do that.  Instead, we have to have a separate "StreamClientState"
-// structure for each "RTSPClient".  To do this, we subclass "RTSPClient", and add a "StreamClientState" field to the subclass:
-
-class ourRTSPClient: public RTSPClient {
-public:
-  static ourRTSPClient* createNew(UsageEnvironment& env, char const* rtspURL,
-				  int verbosityLevel = 0,
-				  char const* applicationName = NULL,
-				  portNumBits tunnelOverHTTPPortNum = 0);
-
-    #define RTSP_CLIENT_VERBOSITY_LEVEL 1
-
-    void openURL(UsageEnvironment& env, char const* progName, char const* rtspURL) {
-        // Begin by creating a "RTSPClient" object.  Note that there is a separate "RTSPClient" object for each stream that we wish
-        // to receive (even if more than stream uses the same "rtsp://" URL).
-        RTSPClient* rtspClient = createNew(env, rtspURL, RTSP_CLIENT_VERBOSITY_LEVEL, progName);
-        if (rtspClient == NULL) {
-            env << "Failed to create a RTSP client for URL \"" << rtspURL << "\": " << env.getResultMsg() << "\n";
-            return;
-        }
-
-        // Next, send a RTSP "DESCRIBE" command, to get a SDP description for the stream.
-        // Note that this command - like all RTSP commands - is sent asynchronously; we do not block, waiting for a response.
-        // Instead, the following function call returns immediately, and we handle the RTSP response later, from within the event loop:
-        rtspClient->sendDescribeCommand(continueAfterDESCRIBE); 
-    }
-
-    
-protected:
-    static void continueAfterDESCRIBE(RTSPClient* rtspClient, int resultCode, char* resultString);
-    static void setupNextSubsession(RTSPClient* rtspClient);
-    static void continueAfterSETUP(RTSPClient* rtspClient, int resultCode, char* resultString);
-    static void continueAfterPLAY(RTSPClient* rtspClient, int resultCode, char* resultString);
-    static void subsessionAfterPlaying(void* clientData);
-    static void subsessionByeHandler(void* clientData, char const* reason);
-    static void streamTimerHandler(void* clientData);
-    static void shutdownStream(RTSPClient* rtspClient, int exitCode = 1);
-    static int rtspClientCount;
-
-    ourRTSPClient(UsageEnvironment& env, char const* rtspURL, int verbosityLevel, char const* applicationName, portNumBits tunnelOverHTTPPortNum);
-    // called only by createNew();
-    virtual ~ourRTSPClient();
-
-public:
-    StreamClientState scs;
-};
 
 ourRTSPClient* ourRTSPClient::createNew(UsageEnvironment& env, char const* rtspURL,
 					int verbosityLevel, char const* applicationName, portNumBits tunnelOverHTTPPortNum) {
@@ -404,68 +288,4 @@ void ourRTSPClient::shutdownStream(RTSPClient* rtspClient, int exitCode) {
     // and replace it with "eventLoopWatchVariable = 1;", so that we leave the LIVE555 event loop, and continue running "main()".)
     exit(exitCode);
   }
-}
-
-
-
-// Even though we're not going to be doing anything with the incoming data, we still need to receive it.
-// Define the size of the buffer that we'll use:
-#define DUMMY_SINK_RECEIVE_BUFFER_SIZE 100000
-
-DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId) {
-  return new DummySink(env, subsession, streamId);
-}
-
-DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId)
-  : MediaSink(env),
-    fSubsession(subsession) {
-  fStreamId = strDup(streamId);
-  fReceiveBuffer = new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE];
-}
-
-DummySink::~DummySink() {
-  delete[] fReceiveBuffer;
-  delete[] fStreamId;
-}
-
-void DummySink::afterGettingFrame(void* clientData, unsigned frameSize, unsigned numTruncatedBytes,
-				  struct timeval presentationTime, unsigned durationInMicroseconds) {
-  DummySink* sink = (DummySink*)clientData;
-  sink->afterGettingFrame(frameSize, numTruncatedBytes, presentationTime, durationInMicroseconds);
-}
-
-// If you don't want to see debugging output for each received frame, then comment out the following line:
-#define DEBUG_PRINT_EACH_RECEIVED_FRAME 1
-
-void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes,
-				  struct timeval presentationTime, unsigned /*durationInMicroseconds*/) {
-  // We've just received a frame of data.  (Optionally) print out information about it:
-#ifdef DEBUG_PRINT_EACH_RECEIVED_FRAME
-  if (fStreamId != NULL) envir() << "Stream \"" << fStreamId << "\"; ";
-  envir() << fSubsession.mediumName() << "/" << fSubsession.codecName() << ":\tReceived " << frameSize << " bytes";
-  if (numTruncatedBytes > 0) envir() << " (with " << numTruncatedBytes << " bytes truncated)";
-  char uSecsStr[6+1]; // used to output the 'microseconds' part of the presentation time
-  sprintf(uSecsStr, "%06u", (unsigned)presentationTime.tv_usec);
-  envir() << ".\tPresentation time: " << (int)presentationTime.tv_sec << "." << uSecsStr;
-  if (fSubsession.rtpSource() != NULL && !fSubsession.rtpSource()->hasBeenSynchronizedUsingRTCP()) {
-    envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
-  }
-#ifdef DEBUG_PRINT_NPT
-  envir() << "\tNPT: " << fSubsession.getNormalPlayTime(presentationTime);
-#endif
-  envir() << "\n";
-#endif
-  
-  // Then continue, to request the next frame of data:
-  continuePlaying();
-}
-
-Boolean DummySink::continuePlaying() {
-  if (fSource == NULL) return False; // sanity check (should not happen)
-
-  // Request the next frame of data from our input source.  "afterGettingFrame()" will get called later, when it arrives:
-  fSource->getNextFrame(fReceiveBuffer, DUMMY_SINK_RECEIVE_BUFFER_SIZE,
-                        afterGettingFrame, this,
-                        onSourceClosure, this);
-  return True;
 }

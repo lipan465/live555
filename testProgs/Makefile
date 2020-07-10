@@ -23,6 +23,7 @@ LIB_SUFFIX =			a
 LIBS_FOR_CONSOLE_APPLICATION = -lssl -lcrypto
 LIBS_FOR_GUI_APPLICATION =
 EXE =
+DESTDIR = /root/live-install
 ##### End of variables to change
 
 MULTICAST_STREAMER_APPS = testMP3Streamer$(EXE) testMPEG1or2VideoStreamer$(EXE) testMPEG1or2AudioVideoStreamer$(EXE) testMPEG2TransportStreamer$(EXE) testMPEG4VideoStreamer$(EXE) testH264VideoStreamer$(EXE) testH265VideoStreamer$(EXE) testDVVideoStreamer$(EXE) testWAVAudioStreamer$(EXE) testAMRAudioStreamer$(EXE) testMKVStreamer$(EXE) testOggStreamer$(EXE) vobStreamer$(EXE)
@@ -31,7 +32,7 @@ MULTICAST_MISC_APPS = testRelay$(EXE) testReplicator$(EXE)
 MULTICAST_APPS = $(MULTICAST_STREAMER_APPS) $(MULTICAST_RECEIVER_APPS) $(MULTICAST_MISC_APPS)
 
 UNICAST_STREAMER_APPS = testOnDemandRTSPServer$(EXE)
-UNICAST_RECEIVER_APPS = testRTSPClient$(EXE) openRTSP$(EXE) playSIP$(EXE) testRTSPClientlib
+UNICAST_RECEIVER_APPS = testRTSPClient$(EXE) openRTSP$(EXE) playSIP$(EXE)
 UNICAST_APPS = $(UNICAST_STREAMER_APPS) $(UNICAST_RECEIVER_APPS)
 
 HLS_APPS = testH264VideoToHLSSegments$(EXE)
@@ -40,6 +41,7 @@ MISC_APPS = testMPEG1or2Splitter$(EXE) testMPEG1or2ProgramToTransportStream$(EXE
 
 ALL = $(MULTICAST_APPS) $(UNICAST_APPS) $(HLS_APPS) $(MISC_APPS)
 all: $(ALL)
+
 
 extra:	testGSMStreamer$(EXE)
 
@@ -173,8 +175,8 @@ mikeyParse$(EXE):    $(MIKEY_PARSE_OBJS) $(LOCAL_LIBS)
 testGSMStreamer$(EXE):	$(GSM_STREAMER_OBJS) $(LOCAL_LIBS)
 	$(LINK)$@ $(CONSOLE_LINK_OPTS) $(GSM_STREAMER_OBJS) $(LIBS)
 
-testRTSPClientlib:	$(TEST_RTSP_CLIENT_OBJS) $(LOCAL_LIBS)
-	$(LINK)$@ -shared -fPIC -o librtspclient.so $(TEST_RTSP_CLIENT_OBJS) $(LIBS) 
+#testRTSPClientlib:	$(TEST_RTSP_CLIENT_OBJS) $(LOCAL_LIBS)
+#	$(LINK)$@ -shared -fPIC -o librtspclient.so $(TEST_RTSP_CLIENT_OBJS) $(LIBS) 
 
 clean:
 	-rm -rf *.so *.$(OBJ) $(ALL) core *.core *~ include/*~
