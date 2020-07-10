@@ -1,6 +1,9 @@
 #pragma once
+#include <functional>
 #include "liveMedia.hh"
 #include "BasicUsageEnvironment.hh"
+
+typedef std::function<void(unsigned frameSize, u_int8_t* data)> FrameCallback;
 
 class DummySink: public MediaSink {
 public:
@@ -8,6 +11,7 @@ public:
 			      MediaSubsession& subsession, // identifies the kind of data that's being received
 			      char const* streamId = NULL); // identifies the stream itself (optional)
 
+    void SetFrameCallback(FrameCallback cb) {_cb = cb;}
 private:
   DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId);
     // called only by "createNew()"
@@ -28,4 +32,5 @@ private:
   u_int8_t* fReceiveBuffer;
   MediaSubsession& fSubsession;
   char* fStreamId;
+  FrameCallback _cb;
 };

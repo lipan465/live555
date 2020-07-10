@@ -2,8 +2,6 @@
 #include "DummySink.h"
 
 
-int ourRTSPClient::rtspClientCount = 0;
-
 UsageEnvironment& operator<<(UsageEnvironment& env, const RTSPClient& rtspClient) {
   return env << "[URL:\"" << rtspClient.url() << "\"]: ";
 }
@@ -28,10 +26,10 @@ StreamClientState::~StreamClientState() {
   }
 }
 
-ourRTSPClient* ourRTSPClient::createNew(UsageEnvironment& env, char const* rtspURL,
-					int verbosityLevel, char const* applicationName, portNumBits tunnelOverHTTPPortNum) {
-  return new ourRTSPClient(env, rtspURL, verbosityLevel, applicationName, tunnelOverHTTPPortNum);
-}
+// ourRTSPClient* ourRTSPClient::createNew(UsageEnvironment& env, char const* rtspURL,
+// 					int verbosityLevel, char const* applicationName, portNumBits tunnelOverHTTPPortNum) {
+//   return new ourRTSPClient(env, rtspURL, verbosityLevel, applicationName, tunnelOverHTTPPortNum);
+// }
 
 ourRTSPClient::ourRTSPClient(UsageEnvironment& env, char const* rtspURL,
 			     int verbosityLevel, char const* applicationName, portNumBits tunnelOverHTTPPortNum)
@@ -94,9 +92,9 @@ void ourRTSPClient::setupNextSubsession(RTSPClient* rtspClient) {
         } else {
             env << *rtspClient << "Initiated the \"" << *scs.subsession << "\" subsession (";
             if (scs.subsession->rtcpIsMuxed()) {
-        env << "client port " << scs.subsession->clientPortNum();
+                env << "client port " << scs.subsession->clientPortNum();
             } else {
-        env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum()+1;
+                env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum()+1;
             }
             env << ")\n";
 
@@ -138,13 +136,17 @@ void ourRTSPClient::continueAfterSETUP(RTSPClient* rtspClient, int resultCode, c
     // (This will prepare the data sink to receive data; the actual flow of data from the client won't start happening until later,
     // after we've sent a RTSP "PLAY" command.)
 
-    scs.subsession->sink = DummySink::createNew(env, *scs.subsession, rtspClient->url());
-      // perhaps use your own custom "MediaSink" subclass instead
-    if (scs.subsession->sink == NULL) {
+    // perhaps use your own custom "MediaSink" subclass instead
+    DummySink* sink = DummySink::createNew(env, *scs.subsession, rtspClient->url());
+    if (sink == NULL) {
       env << *rtspClient << "Failed to create a data sink for the \"" << *scs.subsession
 	  << "\" subsession: " << env.getResultMsg() << "\n";
       break;
     }
+
+    sink->SetFrameCallback(std::bind(&ourRTSPClient::OnNewFrame, (ourRTSPClient*)rtspClient, std::placeholders::_1, std::placeholders::_2));
+
+    scs.subsession->sink = sink;
 
     env << *rtspClient << "Created a data sink for the \"" << *scs.subsession << "\" subsession\n";
     scs.subsession->miscPtr = rtspClient; // a hack to let subsession handler functions get the "RTSPClient" from the subsession 
@@ -260,14 +262,14 @@ void ourRTSPClient::shutdownStream(RTSPClient* rtspClient, int exitCode) {
 
     while ((subsession = iter.next()) != NULL) {
       if (subsession->sink != NULL) {
-	Medium::close(subsession->sink);
-	subsession->sink = NULL;
+	    Medium::close(subsession->sink);
+	    subsession->sink = NULL;
 
-	if (subsession->rtcpInstance() != NULL) {
-	  subsession->rtcpInstance()->setByeHandler(NULL, NULL); // in case the server sends a RTCP "BYE" while handling "TEARDOWN"
-	}
+        if (subsession->rtcpInstance() != NULL) {
+        subsession->rtcpInstance()->setByeHandler(NULL, NULL); // in case the server sends a RTCP "BYE" while handling "TEARDOWN"
+        }
 
-	someSubsessionsWereActive = True;
+	    someSubsessionsWereActive = True;
       }
     }
 
@@ -282,10 +284,10 @@ void ourRTSPClient::shutdownStream(RTSPClient* rtspClient, int exitCode) {
   Medium::close(rtspClient);
     // Note that this will also cause this stream's "StreamClientState" structure to get reclaimed.
 
-  if (--rtspClientCount == 0) {
-    // The final stream has ended, so exit the application now.
-    // (Of course, if you're embedding this code into your own application, you might want to comment this out,
-    // and replace it with "eventLoopWatchVariable = 1;", so that we leave the LIVE555 event loop, and continue running "main()".)
-    exit(exitCode);
-  }
+//   if (--rtspClientCount == 0) {
+//     // The final stream has ended, so exit the application now.
+//     // (Of course, if you're embedding this code into your own application, you might want to comment this out,
+//     // and replace it with "eventLoopWatchVariable = 1;", so that we leave the LIVE555 event loop, and continue running "main()".)
+//     exit(exitCode);
+//   }
 }

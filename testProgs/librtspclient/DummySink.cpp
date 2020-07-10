@@ -13,6 +13,7 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
     fSubsession(subsession) {
   fStreamId = strDup(streamId);
   fReceiveBuffer = new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE];
+  _cb = nullptr;
 }
 
 DummySink::~DummySink() {
@@ -42,6 +43,7 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
   if (fSubsession.rtpSource() != NULL && !fSubsession.rtpSource()->hasBeenSynchronizedUsingRTCP()) {
     envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
   }
+  if(_cb != nullptr) _cb(frameSize, fReceiveBuffer);
 #ifdef DEBUG_PRINT_NPT
   envir() << "\tNPT: " << fSubsession.getNormalPlayTime(presentationTime);
 #endif
